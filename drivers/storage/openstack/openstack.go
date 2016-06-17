@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -379,6 +380,18 @@ func (d *driver) GetVolume(
 	for _, volume := range volumesRet {
 		var attachmentsSD []*core.VolumeAttachment
 		for _, attachment := range volume.Attachments {
+			// try to determine using /dev/disk/by-id which is more accurate
+			dn, err := getDeviceNameById(volumeID)
+			if err != nil {
+				log.WithFields(log.Fields{
+					"moduleName": d.r.Context,
+					"volumeId":   volumeID,
+					"volumeName": volumeName,
+				}).Debug("driver.GetVolume: couldn't get device name by id, falling back to value from openstack")
+			} else {
+				// replace device name with the by-id one
+				attachment["device"] = dn
+			}
 			attachmentSD := &core.VolumeAttachment{
 				VolumeID:   attachment["volume_id"].(string),
 				InstanceID: attachment["server_id"].(string),
@@ -1032,4 +1045,13 @@ func configRegistration() *gofig.Registration {
 	r.Key(gofig.String, "", "", "", "openstack.regionName")
 	r.Key(gofig.String, "", "", "", "openstack.availabilityZoneName")
 	return r
+}
+
+func getDeviceNameById(volumeID string) (string, error) {
+	deviceName := fmt.Sprintf("/dev/disk/by-id/virtio-%s", volumeID[:20])
+	_, err := os.Stat(deviceName)
+	if os.IsNotExist(err) {
+		return "", err
+	}
+	return deviceName, nil
 }
