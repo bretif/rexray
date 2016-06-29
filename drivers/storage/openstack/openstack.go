@@ -158,7 +158,7 @@ func newCmd(c gofig.Config, name string, args ...string) *exec.Cmd {
 }
 
 func (d *driver) getInstanceID(c gofig.Config) (string, error) {
-	cmd := newCmd(c, "/usr/sbin/dmidecode")
+	cmd := newCmd(c, "/opt/bin/dmidecode")
 	cmdOut, err := cmd.Output()
 
 	if err != nil {
@@ -381,6 +381,7 @@ func (d *driver) GetVolume(
 		var attachmentsSD []*core.VolumeAttachment
 		for _, attachment := range volume.Attachments {
 			// try to determine using /dev/disk/by-id which is more accurate
+			log.Info(fmt.Sprintf("%+s", volumeID))
 			dn, err := getDeviceNameById(volumeID)
 			if err != nil {
 				log.WithFields(log.Fields{
@@ -1048,10 +1049,17 @@ func configRegistration() *gofig.Registration {
 }
 
 func getDeviceNameById(volumeID string) (string, error) {
-	deviceName := fmt.Sprintf("/dev/disk/by-id/virtio-%s", volumeID[:20])
-	_, err := os.Stat(deviceName)
-	if os.IsNotExist(err) {
-		return "", err
+	deviceName := ""
+	if len(volumeID) > 0 {
+		deviceName = fmt.Sprintf("/dev/disk/by-id/virtio-%s", volumeID[:20])
+		_, err := os.Stat(deviceName)
+		if os.IsNotExist(err) {
+			return "", err
+		}
+	} else {
+		log.Info("volumeID empty")
+		return "", fmt.Errorf("volumeID empty")
 	}
+	log.Info(fmt.Sprintf("Return deviceName %s", deviceName))
 	return deviceName, nil
 }
